@@ -54,8 +54,8 @@
     }
     select { padding-right: 28px; }
     button.primary {
-      background: linear-gradient(90deg, color-mix(in srgb, var(--neon) 25%, transparent), color-mix(in srgb, var(--neon2) 20%, transparent));
-      box-shadow: 0 0 0 1px color-mix(in srgb, var(--neon) 35%, transparent) inset, 0 0 22px color-mix(in srgb, var(--neon) 18%, transparent);
+      background: linear-gradient(90deg, rgba(54,246,255,0.25), rgba(255,61,242,0.18));
+      box-shadow: 0 0 0 1px rgba(54,246,255,0.35) inset, 0 0 22px rgba(54,246,255,0.18);
     }
     .controlGroup {
       display:flex; align-items:center; gap:8px; padding: 10px 12px; border-radius: 12px;
@@ -73,14 +73,14 @@
     .comboPop {
       position:absolute; left:50%; top:22%; transform:translateX(-50%);
       font-weight:900; font-size:20px; letter-spacing:0.5px; color:var(--accent);
-      text-shadow:0 0 18px color-mix(in srgb, var(--accent) 65%, transparent);
+      text-shadow:0 0 18px rgba(54,246,255,0.55);
       opacity:0; transition:opacity .15s ease, transform .15s ease; pointer-events:none;
     }
     .comboPop.show { opacity:1; transform:translateX(-50%) translateY(-8px); }
     .flash {
       position:absolute; inset:-2px;
-      background: radial-gradient(800px 500px at 50% 30%, color-mix(in srgb, var(--neon) 25%, transparent), transparent 55%),
-                  radial-gradient(700px 450px at 50% 70%, color-mix(in srgb, var(--neon2) 18%, transparent), transparent 60%);
+      background: radial-gradient(800px 500px at 50% 30%, rgba(54,246,255,0.25), transparent 55%),
+                  radial-gradient(700px 450px at 50% 70%, rgba(255,61,242,0.18), transparent 60%);
       opacity: 0;
       transition: opacity 120ms ease;
       pointer-events:none;
@@ -126,7 +126,7 @@
           <div class="controlRow">
             <div class="controlGroup">
               <label for="volumeSlider">BGM</label>
-              <input id="volumeSlider" type="range" min="0" max="100" value="22" />
+              <input id="volumeSlider" type="range" min="0" max="100" value="16" />
             </div>
             <div class="controlGroup">
               <label for="laneSelect">LANES</label>
@@ -187,7 +187,7 @@
   const STORAGE = {
     best: 'neon_dodge_best_v2',
     ranks: 'neon_dodge_ranks_v2',
-    volume: 'neon_dodge_bgm_volume_v1',
+    volume: 'neon_dodge_bgm_volume_v2',
     theme: 'neon_dodge_theme_v1',
     lanes: 'neon_dodge_lanes_v1'
   };
@@ -204,31 +204,58 @@
 
   let audioOn = true;
   let actx = null;
-  function beep(freq=440, dur=0.05, type='sine', gain=0.06) {
+  let masterGain = null;
+  let sfxGain = null;
+
+  function ensureAudio() {
+    if (!actx) {
+      actx = new (window.AudioContext || window.webkitAudioContext)();
+      masterGain = actx.createGain();
+      sfxGain = actx.createGain();
+      masterGain.gain.value = 1;
+      sfxGain.gain.value = 1.7;
+      sfxGain.connect(masterGain).connect(actx.destination);
+    }
+  }
+
+  function beep(freq=440, dur=0.05, type='sine', gain=0.12) {
     if (!audioOn) return;
-    if (!actx) actx = new (window.AudioContext || window.webkitAudioContext)();
+    ensureAudio();
     const t0 = actx.currentTime;
     const o = actx.createOscillator();
     const g = actx.createGain();
     o.type = type;
     o.frequency.value = freq;
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.005);
+    g.gain.exponentialRampToValueAtTime(gain, t0 + 0.004);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
-    o.connect(g).connect(actx.destination);
+    o.connect(g).connect(sfxGain);
     o.start(t0);
-    o.stop(t0 + dur + 0.02);
+    o.stop(t0 + dur + 0.03);
   }
-  function chord() { beep(660,0.06,'triangle',0.05); setTimeout(()=>beep(990,0.06,'triangle',0.04), 35); }
-  function thud() { beep(140,0.08,'sawtooth',0.07); setTimeout(()=>beep(90,0.10,'sine',0.05), 30); }
-  function perfectSfx() { beep(1180,0.05,'square',0.03); setTimeout(()=>beep(1560,0.06,'triangle',0.03), 30); }
-  function comboSfx() { beep(900,0.04,'triangle',0.025); setTimeout(()=>beep(1200,0.05,'triangle',0.025), 25); }
+
+  function chord() {
+    beep(660,0.08,'triangle',0.11);
+    setTimeout(()=>beep(990,0.09,'triangle',0.09), 30);
+  }
+  function thud() {
+    beep(140,0.12,'sawtooth',0.18);
+    setTimeout(()=>beep(90,0.14,'square',0.12), 24);
+  }
+  function perfectSfx() {
+    beep(1180,0.06,'square',0.11);
+    setTimeout(()=>beep(1560,0.08,'triangle',0.1), 26);
+  }
+  function comboSfx() {
+    beep(900,0.05,'triangle',0.08);
+    setTimeout(()=>beep(1200,0.06,'triangle',0.08), 22);
+  }
 
   const BGM_SRC = './bgm.mp3';
   let bgm = null;
   let bgmEnabled = true;
   let bgmFading = false;
-  let bgmVolume = Number(localStorage.getItem(STORAGE.volume) || 0.22);
+  let bgmVolume = Number(localStorage.getItem(STORAGE.volume) || 0.16);
 
   function ensureBgm() {
     if (bgm) return bgm;
@@ -280,7 +307,7 @@
     bgmEnabled = audioOn;
     if (bgmEnabled) {
       muteBtn.textContent = 'SOUND: ON';
-      beep(523,0.05,'triangle',0.035);
+      beep(523,0.06,'triangle',0.08);
       await tryPlayBgm();
     } else {
       muteBtn.textContent = 'SOUND: OFF';
@@ -304,6 +331,14 @@
   });
 
   let theme = localStorage.getItem(STORAGE.theme) || 'neon';
+  function getThemeColors() {
+    const style = getComputedStyle(document.body);
+    return {
+      neon: style.getPropertyValue('--neon').trim() || '#36f6ff',
+      neon2: style.getPropertyValue('--neon2').trim() || '#ff3df2',
+      accent: style.getPropertyValue('--accent').trim() || '#36f6ff'
+    };
+  }
   function applyTheme(value) {
     theme = value;
     document.body.className = `theme-${value}`;
@@ -334,6 +369,7 @@
   let score = 0;
   let level = 1;
   let combo = 0;
+  let maxCombo = 0;
   let perfectCount = 0;
   let beatIndex = 0;
   let spawnTimer = 0;
@@ -341,7 +377,6 @@
   const player = { lane: 1, y: 0, r: 11, pulse: 0, switchedAt: -999 };
   const obs = [];
   const parts = [];
-  const nearMisses = new Set();
 
   function spawnBurst(x,y, clr, count = 18) {
     for (let i=0;i<count;i++){
@@ -357,6 +392,7 @@
 
   function showCombo(text) {
     comboPop.textContent = text;
+    comboPop.style.color = getThemeColors().accent;
     comboPop.classList.remove('show');
     requestAnimationFrame(() => comboPop.classList.add('show'));
     setTimeout(() => comboPop.classList.remove('show'), 420);
@@ -387,11 +423,10 @@
 
   function reset() {
     running = false; gameOver = false;
-    score = 0; level = 1; combo = 0; perfectCount = 0; beatIndex = 0;
+    score = 0; level = 1; combo = 0; maxCombo = 0; perfectCount = 0; beatIndex = 0;
     t = 0;
     obs.length = 0;
     parts.length = 0;
-    nearMisses.clear();
     spawnTimer = 0;
     player.lane = Math.min(Math.floor(lanes / 2), lanes - 1);
     player.pulse = 0;
@@ -407,7 +442,8 @@
   }
 
   async function start() {
-    if (actx && actx.state === 'suspended') actx.resume();
+    ensureAudio();
+    if (actx && actx.state === 'suspended') await actx.resume();
     running = true; gameOver = false;
     overlay.style.display = 'none';
     statePill.textContent = 'LIVE';
@@ -432,7 +468,7 @@
     updateRanking();
 
     overlay.querySelector('.title').textContent = 'GAME OVER';
-    overlaySubtitle.innerHTML = `SCORE <b>${score}</b> • BEST <b>${best}</b><br/>PERFECT ${perfectCount}회 • Combo 최고 ${combo}`;
+    overlaySubtitle.innerHTML = `SCORE <b>${score}</b> • BEST <b>${best}</b><br/>PERFECT ${perfectCount}회 • Combo 최고 ${maxCombo}`;
     startBtn.textContent = 'RETRY';
     overlay.style.display = 'grid';
   }
@@ -441,12 +477,14 @@
     player.lane = (player.lane + 1) % lanes;
     player.pulse = 0.18;
     player.switchedAt = performance.now() / 1000;
-    beep(880, 0.04, 'square', 0.03);
+    beep(880, 0.07, 'square', 0.12);
     vibrate(10);
   }
 
   async function input(e) {
     if (e.target.closest('button, select, input')) return;
+    ensureAudio();
+    if (actx && actx.state === 'suspended') await actx.resume();
     await tryPlayBgm();
     if (!running) await start();
     else nextLane();
@@ -461,6 +499,7 @@
     beatIndex++;
     const baseSpeed = 240 + level * 16;
     const h = 18 + ((beatIndex % 3) * 8);
+    const colors = getThemeColors();
     for (const lane of beat) {
       obs.push({
         id: `${beatIndex}-${lane}-${Math.random()}`,
@@ -470,12 +509,14 @@
         w: 38,
         speed: baseSpeed,
         scored: false,
-        perfectAwarded: false
+        perfectAwarded: false,
+        glow: lane % 2 === 0 ? colors.neon : colors.neon2,
+        fill: lane % 2 === 0 ? 'rgba(54,246,255,0.28)' : 'rgba(255,61,242,0.28)'
       });
     }
   }
 
-  function handlePerfect(o, w, h) {
+  function handlePerfect(o, w) {
     if (o.perfectAwarded) return;
     const px = laneX(w, lanes, player.lane);
     const py = player.y;
@@ -487,12 +528,13 @@
       o.perfectAwarded = true;
       perfectCount++;
       combo++;
+      maxCombo = Math.max(maxCombo, combo);
       const bonus = 2 + Math.min(8, combo);
       score += bonus;
       showCombo(`PERFECT +${bonus}`);
       perfectSfx();
       if (combo > 1 && combo % 3 === 0) comboSfx();
-      spawnBurst(px, py, getComputedStyle(document.body).getPropertyValue('--accent').trim() || '#36f6ff', 14);
+      spawnBurst(px, py, getThemeColors().accent, 14);
       vibrate([12, 18, 12]);
       updateHUD();
     }
@@ -526,13 +568,12 @@
       for (let i=obs.length-1;i>=0;i--) {
         const o = obs[i];
         o.y += o.speed * dt;
-
-        handlePerfect(o, w, h);
+        handlePerfect(o, w);
 
         if (!o.scored && o.y > player.y) {
           o.scored = true;
           score += 1;
-          if (score % 6 === 0) beep(660,0.05,'triangle',0.03);
+          if (score % 6 === 0) beep(660,0.07,'triangle',0.08);
           updateHUD();
         }
 
@@ -575,6 +616,7 @@
   function draw() {
     const rect = canvas.getBoundingClientRect();
     const W = rect.width, H = rect.height;
+    const colors = getThemeColors();
     ctx.clearRect(0,0,W,H);
 
     ctx.save();
@@ -588,7 +630,8 @@
 
     ctx.save();
     ctx.lineWidth = 2;
-    ctx.strokeStyle = 'color-mix(in srgb, var(--neon) 40%, transparent)';
+    ctx.strokeStyle = colors.neon;
+    ctx.globalAlpha = 0.28;
     for (let i=0;i<lanes;i++) {
       const x = laneX(W, lanes, i);
       ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke();
@@ -599,17 +642,24 @@
       const x = laneX(W, lanes, o.lane);
       const y = o.y;
       const w = o.w, h = o.h;
-      const hueA = o.lane % 2 === 0 ? 'var(--neon)' : 'var(--neon2)';
+      const glow = o.lane % 2 === 0 ? colors.neon : colors.neon2;
+      const fill = o.lane % 2 === 0
+        ? hexToRgba(colors.neon, 0.30)
+        : hexToRgba(colors.neon2, 0.30);
+      const core = o.lane % 2 === 0
+        ? hexToRgba(colors.neon, 0.95)
+        : hexToRgba(colors.neon2, 0.92);
+
       ctx.save();
       ctx.shadowBlur = 18;
-      ctx.shadowColor = `color-mix(in srgb, ${hueA} 70%, transparent)`;
-      ctx.fillStyle = `color-mix(in srgb, ${hueA} 30%, transparent)`;
+      ctx.shadowColor = glow;
+      ctx.fillStyle = fill;
       roundRect(ctx, x - w/2, y - h/2, w, h, 10);
       ctx.fill();
       ctx.restore();
 
       ctx.save();
-      ctx.fillStyle = `color-mix(in srgb, ${hueA} 82%, white 5%)`;
+      ctx.fillStyle = core;
       roundRect(ctx, x - w/2 + 5, y - h/2 + 4, w-10, h-8, 8);
       ctx.fill();
       ctx.restore();
@@ -621,15 +671,15 @@
     const pulse = player.pulse;
     const rr = 12 + pulse*18;
     ctx.shadowBlur = 26;
-    ctx.shadowColor = 'rgba(116,255,107,0.8)';
-    ctx.fillStyle = 'rgba(116,255,107,0.35)';
+    ctx.shadowColor = hexToRgba(colors.accent, 0.9);
+    ctx.fillStyle = hexToRgba(colors.accent, 0.32);
     ctx.beginPath(); ctx.arc(px, py, rr, 0, Math.PI*2); ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.shadowBlur = 16;
-    ctx.shadowColor = 'rgba(116,255,107,0.9)';
-    ctx.fillStyle = 'rgba(116,255,107,0.95)';
+    ctx.shadowColor = hexToRgba(colors.accent, 0.95);
+    ctx.fillStyle = hexToRgba(colors.accent, 0.98);
     ctx.beginPath(); ctx.arc(px, py, 11, 0, Math.PI*2); ctx.fill();
     ctx.restore();
 
@@ -648,6 +698,17 @@
     ctx.fillStyle = g;
     ctx.fillRect(0,0,W,H);
     ctx.restore();
+  }
+
+  function hexToRgba(hex, alpha) {
+    if (!hex || !hex.startsWith('#')) return `rgba(255,255,255,${alpha})`;
+    let value = hex.replace('#','');
+    if (value.length === 3) value = value.split('').map(v => v + v).join('');
+    const int = parseInt(value, 16);
+    const r = (int >> 16) & 255;
+    const g = (int >> 8) & 255;
+    const b = int & 255;
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
   }
 
   function roundRect(ctx, x, y, w, h, r) {
