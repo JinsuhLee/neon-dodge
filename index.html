@@ -134,6 +134,7 @@
   const startBtn = document.getElementById('startBtn');
   const muteBtn = document.getElementById('muteBtn');
 
+  // HiDPI resize
   function resize() {
     const rect = canvas.getBoundingClientRect();
     const dpr = Math.max(1, Math.min(3, window.devicePixelRatio || 1));
@@ -144,6 +145,7 @@
   new ResizeObserver(resize).observe(canvas);
   window.addEventListener('orientationchange', () => setTimeout(resize, 200));
 
+  // SFX (WebAudio)
   let audioOn = true;
   let actx = null;
   function beep(freq=440, dur=0.05, type='sine', gain=0.06) {
@@ -164,19 +166,68 @@
   function chord() { beep(660,0.06,'triangle',0.05); setTimeout(()=>beep(990,0.06,'triangle',0.04), 35); }
   function thud() { beep(140,0.08,'sawtooth',0.07); setTimeout(()=>beep(90,0.10,'sine',0.05), 30); }
 
-  muteBtn.addEventListener('click', (e) => {
+  // BGM (HTMLAudio)
+  const BGM_SRC = 'https://cdn.pixabay.com/audio/2023/08/04/audio_13ac04766e.mp3';
+  let bgm = null;
+  let bgmReady = false;
+  let bgmEnabled = true;
+
+  function ensureBgm() {
+    if (bgm) return bgm;
+    bgm = new Audio(BGM_SRC);
+    bgm.loop = true;
+    bgm.preload = 'auto';
+    bgm.crossOrigin = 'anonymous';
+    bgm.volume = 0.45;
+    bgm.addEventListener('canplaythrough', () => { bgmReady = true; });
+    bgm.addEventListener('error', () => {
+      // If the remote audio fails to load, keep the game playable (SFX still work)
+      bgmEnabled = false;
+      muteBtn.textContent = 'SOUND: ON (BGM FAIL)';
+    });
+    return bgm;
+  }
+
+  async function tryPlayBgm() {
+    if (!bgmEnabled) return;
+    const a = ensureBgm();
+    try {
+      await a.play();
+    } catch {
+      // Autoplay policy: will succeed after a user gesture (we call from pointer events anyway)
+    }
+  }
+
+  function pauseBgm() {
+    if (!bgm) return;
+    try { bgm.pause(); } catch {}
+  }
+
+  muteBtn.addEventListener('click', async (e) => {
     e.stopPropagation();
     audioOn = !audioOn;
-    muteBtn.textContent = `SOUND: ${audioOn ? 'ON' : 'OFF'}`;
-    if (audioOn) beep(523,0.05,'triangle',0.04);
+
+    // tie BGM to SOUND toggle
+    bgmEnabled = audioOn;
+    if (bgmEnabled) {
+      muteBtn.textContent = 'SOUND: ON';
+      beep(523,0.05,'triangle',0.04);
+      await tryPlayBgm();
+    } else {
+      muteBtn.textContent = 'SOUND: OFF';
+      pauseBgm();
+    }
   });
 
+  // Game constants
   const laneX = (w, lane) => (w * (lane === 0 ? 0.35 : 0.65));
   const clamp = (v,a,b)=>Math.max(a,Math.min(b,v));
 
+  // Persistent best
   const BEST_KEY = 'neon_dodge_best_v1';
   let best = Number(localStorage.getItem(BEST_KEY) || 0);
 
+  // State
   let running = false;
   let gameOver = false;
 
@@ -187,6 +238,7 @@
   let score = 0;
   let level = 1;
 
+  // Player
   const player = {
     lane: 0,
     y: 0,
@@ -194,9 +246,11 @@
     pulse: 0
   };
 
+  // Obstacles
   const obs = [];
   let spawnTimer = 0;
 
+  // Particles
   const parts = [];
   function spawnBurst(x,y, clr) {
     for (let i=0;i<18;i++){
@@ -226,12 +280,13 @@
     startBtn.textContent = 'START';
   }
 
-  function start() {
+  async function start() {
     if (actx && actx.state === 'suspended') actx.resume();
     running = true; gameOver = false;
     overlay.style.display = 'none';
     statePill.textContent = 'LIVE';
     chord();
+    await tryPlayBgm();
   }
 
   function end() {
@@ -266,14 +321,19 @@
     beep(880, 0.04, 'square', 0.035);
   }
 
-  function input(e) {
+  async function input(e) {
     if (e.target.closest('button')) return;
-    if (!running) start();
+
+    // user gesture: try to start BGM as early as possible
+    await tryPlayBgm();
+
+    if (!running) await start();
     else toggleLane();
   }
 
+  // Make sure the first interaction is treated as a gesture for audio
   gameEl.addEventListener('pointerdown', input);
-  startBtn.addEventListener('click', (e)=>{ e.stopPropagation(); reset(); start(); });
+  startBtn.addEventListener('click', async (e)=>{ e.stopPropagation(); reset(); await start(); });
 
   function step(now) {
     const dt = Math.min(0.033, (now - last) / 1000);
@@ -444,6 +504,12 @@
     ctx.arcTo(x,   y,   x+w, y,   rr);
     ctx.closePath();
   }
+
+  // Pause BGM when tab is hidden
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) pauseBgm();
+    else tryPlayBgm();
+  });
 
   reset();
   requestAnimationFrame((n)=>{ last=n; requestAnimationFrame(step); });
